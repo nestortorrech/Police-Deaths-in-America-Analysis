@@ -1,0 +1,227 @@
+---
+title: "Police Death Portfolio Project"
+author: "Nestor Torrech"
+date: '2022-06-21'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Hello, welcome to my exploratory analysis of a dataset compiling registered police deaths in the United States. The main focus of this project shall be to perform some beginner and intermediate queries to answer interesting questions about the data and to demonstrate my proficiency with SQL. Some additional details are the following.
+
+This document was prepared in Rmarkdown, utilzing its particular features which allow me to use SQL syntax within the R framework. This proves immensely useful as Rmarkdown can generate this pdf.
+
+## Preparing the Data
+
+As we stated before, the Dataset is sourced from Kaggle, but originally comes from FiveThirtyEight. Links to both sources shall be included in the *.txt* file that is in this project's repository. In this same text file, other relevant information, such as the data dictionary are available for those interested.
+
+Now, on to the subject of interest. First things first, we'll load some libraries that will facilitate us working with SQL in Rmarkdown.
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(odbc)
+police_death <- read_csv("C:\\SQL Datasets\\Datasets for Portfolio Project\\police_deaths_in_america.csv")
+head(police_death)
+```
+The data stretches back all the way to the late 18th century! These means we've got plenty to parse through ahead of us. It's important to note that at this point in the process, the table is being handled purely through R code. So, if we want to manipulate it using SQL, we'll need to set up a Database in R.
+
+So let's get to it.
+
+#### **NOTE:** Bear in mind that in the pdf version of this document, due to the formating in Rmarkdown, the text will look somewhat squished once we view all the columns in the dataset. This only happens on this occasion. If you wish to have a clearer view of the Data, please refer to the html version of this report or perhaps consider using the rmd file in which this document was drafted. Please forgive any inconvenience
+
+### Readying the Database
+
+```{r}
+#Readying a Database
+
+pol_DB <- dbConnect(drv = RSQLite::SQLite(),
+                    dbname = ":memory:")
+                    
+#Storing Sample Data
+
+dbWriteTable(conn = pol_DB,
+              name = "police_death",
+              value = police_death)
+
+# Remove table from environment
+
+rm(police_death)
+```
+
+
+```{r}
+tbl(src = pol_DB,
+    "police_death")
+```
+```{sql connection=pol_DB}
+SELECT * 
+FROM police_death
+```
+Now we're talking! Now that we have *police_death* as an SQL table, we can apply SQL commands like we just did. Here we merely applied a basic command to open up all the information available to us. Now that everything's up and running we can start asking ourselves some interesting questions about the data.
+
+## What caused the most deaths?
+
+We see here that the column *Cause_of_Death* relates to us in what manner the police officer died. While this in and of itself is useful, perhaps we could make it even more useful by applying an aggregate function to discern what caused the most police deaths.
+
+```{sql connection = pol_DB}
+-- Total Deaths by Types
+SELECT Cause_of_Death, COUNT(*) AS Deaths
+FROM police_death
+GROUP BY Cause_of_Death
+ORDER BY Deaths DESC
+
+```
+
+Perhaps predictably, the most common cause of death among officers was gunfire in the line of action. This followed by Automobile crashes, Heart Attacks, Motorcycle crashes, and vehicular assault.
+
+Let's apply this same query to other categories
+
+## Which Ranks died the most?
+
+```{sql connection = pol_DB}
+-- Total Deaths by Rank
+SELECT Rank, COUNT(*) AS Deaths
+FROM police_death
+GROUP BY Rank
+ORDER BY Deaths DESC
+```
+Here the top 5 ranks of those that died are more evenly spread by the look of it. Patrolman clocks in at the most deaths, which makes sense considering that these would be the policemen more out on the field most out on the field. There less deaths the ranks has, the more likely it seems to be a senior or administrative role. Another possibility could also be that there are some roles whose duties are similar, yet for whatever reason function under different titles or might be more obscure.
+ 
+## Number of Deaths by Year 
+
+```{sql connection = pol_DB}
+-- Number of Deaths by Year
+SELECT Year, COUNT(*) AS Deaths
+FROM police_death
+WHERE Year >= 1930
+GROUP BY Year
+ORDER BY Deaths DESC
+```
+So, we changed things up a little for measuring the deaths by year. We restricted the analysis to the year 1930 onwards since reports prior to that tend to be more sparse. So for the sake of slimming the analysis, we went with that restriction.
+
+Shockingly, *2021* and *2020* seem to be some of the most violent years in terms of police death in memory. Not only that, but going on the basis of the dataset, they are the two most violent years for police officers in US history. Both *1930* and *1932* trail behind it.
+
+## Segmenting Number of Deaths by Cause and Rank
+
+```{sql connection = pol_DB}
+-- Number of Deaths broken down by Rank and Cause
+SELECT Rank, Cause_of_Death AS Cause, COUNT(*) AS Deaths
+FROM police_death
+WHERE Year >= 1930
+GROUP BY Rank, Cause
+HAVING Deaths >= 200
+ORDER BY Deaths DESC
+```
+Here we segmented deaths in accordance to police officer Rank and the Cause. Again, to streamline our analysis, I limited the rows to show only those situations in which deaths exceeded 200. I did this utilizing a *HAVING* statement. The top 5 deaths are related to Gunfire, which is consistent with the results we found earlier.
+
+But let's make that ranking official using the *RANK* window function.
+
+## Ranking of Death Causes
+
+```{sql connection = pol_DB}
+-- Ranking the Causes of Death
+SELECT Rank, Cause_of_Death AS Cause, COUNT(*) AS Deaths, 
+RANK() OVER(ORDER BY COUNT(*) DESC) AS Rank 
+FROM police_death
+WHERE Year >= 1930
+GROUP BY Cause, Rank
+HAVING Deaths >= 200
+LIMIT 5
+```
+Here are our ranks. A pretty nifty feature if I might say so myself.
+
+## Peering through Window Functions
+
+We toyed around a bit with window functions earlier by using the *RANK* function. However, with this nice feature, we can do a fair bit more things. But before we get to that, it would be prudent to create a couple Views in SQL to facilitate the analysis. The Views will be useful in that, they store the result of a query as though it were a table.
+
+What does this mean?
+
+Well, for our purposes, the primary aim in this is so we can apply Aggregate Functions to Aliased column 'Deaths'. Deaths being the column we created in our prior queries in order to aggregate the counts of individually reported deaths. If we can perform aggregate functions on 'Deaths' it will allow us to query interesting results we were not able to query earlier
+
+
+### Creating the Yearly Death View
+
+Our first view shall be for looking at the total police deaths reported per year
+
+```{sql connection = pol_DB}
+-- Number of Deaths by Year
+CREATE VIEW [Year Deaths] AS
+SELECT Year, COUNT(*) AS Deaths
+FROM police_death
+GROUP BY Year;
+
+SELECT * FROM [Year Deaths];
+
+SELECT AVG(Deaths) FROM [Year Deaths];
+```
+### Creating the Yearly Death View by Rank
+
+Next we'll create another view that shall serve our purposes more generally.
+
+```{sql connection = pol_DB}
+-- Yearly Ranked Deaths by Year
+CREATE VIEW [Yearly Rank Deaths] AS
+SELECT Rank,
+      Cause_of_Death,
+      Year,
+      COUNT(*) AS Deaths
+FROM police_death
+GROUP BY Year, Rank;
+
+```
+```{sql connection = pol_DB}
+SELECT * FROM [Yearly Rank Deaths]
+ORDER BY Year DESC
+
+```
+
+#### Window Functions to find Cumulative Sum of Deaths
+
+Now, if we wanted to find see how deaths accumulated over time, we need only employ a window function for our purposes. Using an **OVER** and **PARTITION BY** statement, we can create a new column called **Accumulated_Deaths** which will show how each death increases per year by cause of death. I also included a **CASE** statement that shall evaluate when the Death count for a particular year (in case of gunfire) exceeds three deaths in a year
+
+It should be noted that I shall be restricting the analysis to Gunfire Deaths, as such deaths are the most common, and it's easier to read what's going on with the accumulated deaths by restricting them to one cause. Similarly, I filtered the date to only those police deaths registered on or after 1930. The query itself can easily be tweaked so as to accomodate for other causes of deaths or years.
+
+```{sql connection = pol_DB}
+SELECT Year, Cause_of_Death, Deaths,
+SUM(Deaths) OVER(PARTITION BY Cause_of_Death ORDER BY Year ASC) AS Accumulated_Deaths,
+CASE WHEN
+  Deaths > 3 THEN 1
+  ELSE 0
+  END AS "High_Death_Year"
+FROM [Yearly Rank Deaths]
+WHERE Cause_of_Death = "Gunfire" AND Year >= 1930
+GROUP BY Cause_of_Death, Year
+ORDER BY Year ASC
+```
+##### Subqueries to Determine High Death Years 
+
+Here, we'll put to work the first view we created, which focused on the deaths grouped by year. What I'm interested in doing is comparing years to each other in the dataset, and to this end, I figured that finding out the severity in terms of death for a given year would be of interest. Notice that to do this I used a subquery to find the average deaths from the dataset filtered for 1930. Then, I used a **CASE** statement where I compared the total sum of deaths in a given year to the average deaths of said year times 2 or divided by 2--using either metric to determine whether the year had high or lower deaths than usual. This too was accomplished with a subquery as can be seen in the denominator. 
+
+```{sql connection = pol_DB}
+-- Determining High Death Years
+SELECT Year, Deaths,
+(SELECT AVG(DEATHS) FROM [Year Deaths] WHERE Year >= 1930) AS Average_Deaths,
+CASE
+  WHEN Deaths > (SELECT AVG(DEATHS) FROM [Year Deaths]) * 2 THEN 'High Death Year'
+  WHEN Deaths < (SELECT AVG(DEATHS) FROM [Year Deaths]) /2 THEN 'Low Death Year'
+  ELSE 'Normal Year' 
+  END AS Year_Class
+FROM [Year Deaths]
+WHERE Year >= 1930
+GROUP BY Year 
+ORDER BY Year DESC
+```
+
+
+## Conclusion
+
+This was a perfect occasion and dataset to test out various functions in SQL. As you can see, there was plenty of useful information which we may not have been able to see otherwise if we'd used another program.
+
+As for me, I'm happy that you took the time to read through this. Have a good one!

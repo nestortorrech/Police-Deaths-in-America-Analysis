@@ -1,0 +1,36 @@
+#########################################
+Police Deaths in USA
+#########################################
+
+Link: https://www.kaggle.com/datasets/mayureshkoli/police-deaths-in-usa-from-1791-to-2022
+
+###################################################
+BELOW IS A VERBATIM COPY OF THE KAGGLE DESCRIPTION
+###################################################
+
+About Dataset
+This dataset contains information on fatal police deaths in the United States. The data includes the
+victim's rank, name, department, date of death, and cause of death. The data spans from 1791 to the
+present day. This dataset will be updated on monthly basis.
+
+This dataset has 10 variables:
+
+Rank (String) -> Rank assigned or achieved by the police throughout their tenure.
+Name (String) -> The name of the person
+CauseofDeath (String) -> The cause of the death
+Date (String) -> The full date of the incident
+Year (Int) -> The year of the incident
+Month (String) -> The month of the incident
+Day (String) -> The day of the incident
+Department (String)-> The department's name and the person who works there.
+State (String) -> The state where the department is situated
+K9_Unit (Boolean)-> K9, the nickname of police dogs and the police dog unit itself
+
+Acknowledgements:
+
+The original dataset was collected by FiveThirtyEight and it contains police death data from 1791 to 2016.
+Here is the link -> https://data.world/fivethirtyeight/police-deaths.
+
+The reason I made this dataset is because it had not been updated since 2016 and the scrapping script was outdated, so I decided to make a new scrapper and update the dataset till present.
+I got this idea from the FiveThirtyEight group and a fellow kaggler, Satoshi Datamoto, who uploaded
+the dataset on kaggle. Thank you for inspiration.
